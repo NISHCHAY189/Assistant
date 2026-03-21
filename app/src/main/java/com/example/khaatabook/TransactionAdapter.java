@@ -14,10 +14,12 @@ import java.util.Locale;
 public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.ViewHolder> {
 
     private List<Transaction> transactions;
+    private List<Customer> customers;
     private SimpleDateFormat dateFormat = new SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault());
 
-    public TransactionAdapter(List<Transaction> transactions) {
+    public TransactionAdapter(List<Transaction> transactions, List<Customer> customers) {
         this.transactions = transactions;
+        this.customers = customers;
     }
 
     @NonNull
@@ -29,18 +31,28 @@ public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        Transaction t = transactions.get(position);
+        Transaction t = transactions.get(transactions.size() - 1 - position); // Show newest first
         
         holder.tvDate.setText(dateFormat.format(new Date(t.getDate())));
         
+        String customerName = "Unknown";
+        for (Customer c : customers) {
+            if (c.getId() == t.getCustomerId()) {
+                customerName = c.getName();
+                break;
+            }
+        }
+
         if ("lend".equals(t.getType())) {
-            holder.tvTitle.setText(t.getItem());
-            holder.tvSubtitle.setText(String.format(Locale.getDefault(), "%.1f %s x ₹%d", t.getQty(), t.getUnit(), t.getPrice()));
+            holder.tvIcon.setText("📦");
+            holder.tvTitle.setText(t.getItem() + " (" + (int)t.getQty() + t.getUnit() + ")");
+            holder.tvSubtitle.setText(customerName);
             holder.tvAmount.setText(String.format(Locale.getDefault(), "₹%d", t.getTotal()));
             holder.tvAmount.setTextColor(holder.itemView.getContext().getResources().getColor(R.color.red_error));
         } else {
+            holder.tvIcon.setText("💰");
             holder.tvTitle.setText("Payment Received");
-            holder.tvSubtitle.setText(t.getNote() != null ? t.getNote() : "Cash/UPI");
+            holder.tvSubtitle.setText(customerName);
             holder.tvAmount.setText(String.format(Locale.getDefault(), "₹%d", t.getTotal()));
             holder.tvAmount.setTextColor(holder.itemView.getContext().getResources().getColor(R.color.green_success));
         }
@@ -52,7 +64,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView tvTitle, tvSubtitle, tvAmount, tvDate;
+        TextView tvTitle, tvSubtitle, tvAmount, tvDate, tvIcon;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -60,6 +72,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.
             tvSubtitle = itemView.findViewById(R.id.tv_trans_subtitle);
             tvAmount = itemView.findViewById(R.id.tv_trans_amount);
             tvDate = itemView.findViewById(R.id.tv_trans_date);
+            tvIcon = itemView.findViewById(R.id.tv_trans_icon);
         }
     }
 }

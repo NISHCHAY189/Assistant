@@ -12,10 +12,11 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,23 +102,22 @@ public class CustomersFragment extends Fragment {
     }
 
     private void showAddCustomerDialog() {
-        View view = getLayoutInflater().inflate(R.layout.dialog_add_customer, null);
-        EditText etName = view.findViewById(R.id.et_name);
-        EditText etPhone = view.findViewById(R.id.et_phone);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_customer, null);
+        EditText etName = dialogView.findViewById(R.id.et_name);
+        EditText etPhone = dialogView.findViewById(R.id.et_phone);
 
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Add New Customer")
-                .setView(view)
-                .setPositiveButton("Add", (dialog, which) -> {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setView(dialogView)
+                .setPositiveButton("Create Account", (dialog, which) -> {
                     String name = etName.getText().toString().trim();
                     String phone = etPhone.getText().toString().trim();
                     if (!name.isEmpty()) {
                         Customer newCustomer = new Customer(customerList.size() + 1, name, phone, 0);
                         customerList.add(newCustomer);
                         filter(etSearch.getText().toString());
-                        Toast.makeText(getContext(), "Customer added", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Customer added successfully", Toast.LENGTH_SHORT).show();
                     } else {
-                        Toast.makeText(getContext(), "Name cannot be empty", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Name is required", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .setNegativeButton("Cancel", null)

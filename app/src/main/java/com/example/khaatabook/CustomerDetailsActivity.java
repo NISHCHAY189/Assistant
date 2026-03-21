@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -25,6 +26,7 @@ public class CustomerDetailsActivity extends AppCompatActivity {
     private List<Transaction> customerTransactions;
     private int customerId;
     private String customerName;
+    private List<Customer> customerList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +37,10 @@ public class CustomerDetailsActivity extends AppCompatActivity {
         customerName = getIntent().getStringExtra("customer_name");
         String phone = getIntent().getStringExtra("customer_phone");
         int balance = getIntent().getIntExtra("customer_balance", 0);
+        
+        // Context for adapter to resolve names
+        customerList = new ArrayList<>();
+        customerList.add(new Customer(customerId, customerName, phone, balance));
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -51,7 +57,9 @@ public class CustomerDetailsActivity extends AppCompatActivity {
         rvTransactions = findViewById(R.id.rv_transactions);
         fabAdd = findViewById(R.id.fab_add_transaction);
 
-        tvAvatar.setText(String.valueOf(customerName.charAt(0)));
+        if (customerName != null && !customerName.isEmpty()) {
+            tvAvatar.setText(String.valueOf(customerName.charAt(0)));
+        }
         tvName.setText(customerName);
         tvPhone.setText(phone);
         updateBalanceDisplay(balance);
@@ -72,8 +80,8 @@ public class CustomerDetailsActivity extends AppCompatActivity {
 
     private void setupTransactions() {
         customerTransactions = new ArrayList<>();
-        // In a real app, load from database where customerId matches
-        adapter = new TransactionAdapter(customerTransactions);
+        // Note: In a real app, you'd load actual transactions here
+        adapter = new TransactionAdapter(customerTransactions, customerList);
         rvTransactions.setLayoutManager(new LinearLayoutManager(this));
         rvTransactions.setAdapter(adapter);
     }
@@ -108,11 +116,10 @@ public class CustomerDetailsActivity extends AppCompatActivity {
                     } else {
                         t = new Transaction(customerTransactions.size() + 1, customerId, "payment", amount, System.currentTimeMillis(), item);
                     }
-                    customerTransactions.add(0, t);
-                    adapter.notifyItemInserted(0);
+                    customerTransactions.add(t);
+                    adapter.notifyDataSetChanged();
                     rvTransactions.scrollToPosition(0);
                     
-                    // Logic to update customer balance would go here
                     Toast.makeText(this, "Transaction Saved", Toast.LENGTH_SHORT).show();
                 }
             })

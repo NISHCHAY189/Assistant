@@ -30,6 +30,7 @@ public class CustomerDetailsFragment extends Fragment {
     private TransactionAdapter adapter;
     private List<Transaction> customerTransactions;
     private Customer selectedCustomer;
+    private List<Customer> customerList;
 
     @Nullable
     @Override
@@ -41,12 +42,15 @@ public class CustomerDetailsFragment extends Fragment {
         }
 
         if (selectedCustomer == null) {
-            // Go back if no customer selected
             if (getActivity() instanceof MainActivity) {
                 ((MainActivity) getActivity()).showHome();
             }
             return view;
         }
+        
+        // Mocking customer list for the adapter
+        customerList = new ArrayList<>();
+        customerList.add(selectedCustomer);
 
         initializeViews(view);
         setupTransactions();
@@ -62,7 +66,9 @@ public class CustomerDetailsFragment extends Fragment {
         rvTransactions = view.findViewById(R.id.rv_transactions);
         fabAdd = view.findViewById(R.id.fab_add_transaction);
 
-        tvAvatar.setText(String.valueOf(selectedCustomer.getName().charAt(0)));
+        if (selectedCustomer.getName() != null && !selectedCustomer.getName().isEmpty()) {
+            tvAvatar.setText(String.valueOf(selectedCustomer.getName().charAt(0)));
+        }
         tvName.setText(selectedCustomer.getName());
         tvPhone.setText(selectedCustomer.getPhone());
         updateBalanceDisplay(selectedCustomer.getOutstanding());
@@ -72,8 +78,8 @@ public class CustomerDetailsFragment extends Fragment {
         Button btnAddPayment = view.findViewById(R.id.btn_add_payment);
         Button btnGenerateBill = view.findViewById(R.id.btn_generate_bill);
 
-        btnAddPayment.setOnClickListener(v -> showAddPaymentDialog());
-        btnGenerateBill.setOnClickListener(v -> generateBill());
+        if (btnAddPayment != null) btnAddPayment.setOnClickListener(v -> showAddPaymentDialog());
+        if (btnGenerateBill != null) btnGenerateBill.setOnClickListener(v -> generateBill());
     }
 
     private void updateBalanceDisplay(int balance) {
@@ -88,7 +94,7 @@ public class CustomerDetailsFragment extends Fragment {
     private void setupTransactions() {
         customerTransactions = new ArrayList<>();
         // In a real app, load from database where customerId matches
-        adapter = new TransactionAdapter(customerTransactions);
+        adapter = new TransactionAdapter(customerTransactions, customerList);
         rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
         rvTransactions.setAdapter(adapter);
     }

@@ -3,21 +3,24 @@ package com.example.khaatabook;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
-import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,47 +28,34 @@ import java.util.Locale;
 
 public class HomeFragment extends Fragment {
 
-    private TextView tvDate, tvTotalOutstanding, tvStatsSummary, tvCustomerCount;
-    private CardView btnVoice, btnCustomers, btnReports, btnBill;
-    private Button btnAddCustomer;
+    private RecyclerView rvTransactions;
     private EditText etSearch;
-    private RecyclerView rvCustomers;
-
-    private CustomerAdapter adapter;
+    private TextView tvTotalBalance, tvTotalCustomers;
+    private Button btnAddCustomer;
     private List<Customer> customerList;
-    private List<Customer> filteredList;
     private List<Transaction> transactionList;
+    private List<Transaction> filteredTransactions;
+    private TransactionAdapter transactionAdapter;
+    private LinearLayout chartContainer;
+    private ChipGroup chipGroupFilter;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_home, container, false);
 
+        initializeData();
         initializeViews(view);
-        setupData();
-        setupClickListeners();
+        setupRecyclerView();
         setupSearch();
+        setupChartFilters();
+        updateSummary();
+        updateChart("week");
 
         return view;
     }
 
-    private void initializeViews(View view) {
-        tvDate = view.findViewById(R.id.tv_date);
-        tvTotalOutstanding = view.findViewById(R.id.tv_total_outstanding);
-        tvStatsSummary = view.findViewById(R.id.tv_stats_summary);
-        tvCustomerCount = view.findViewById(R.id.tv_customer_count);
-
-        btnVoice = view.findViewById(R.id.btn_voice);
-        btnCustomers = view.findViewById(R.id.btn_customers);
-        btnReports = view.findViewById(R.id.btn_reports);
-        btnBill = view.findViewById(R.id.btn_bill);
-
-        btnAddCustomer = view.findViewById(R.id.btn_add_customer);
-        etSearch = view.findViewById(R.id.et_search);
-        rvCustomers = view.findViewById(R.id.rv_customers);
-    }
-
-    private void setupData() {
+    private void initializeData() {
         if (getActivity() instanceof MainActivity) {
             customerList = ((MainActivity) getActivity()).getCustomerList();
             transactionList = ((MainActivity) getActivity()).getTransactionList();
@@ -73,20 +63,89 @@ public class HomeFragment extends Fragment {
             customerList = new ArrayList<>();
             transactionList = new ArrayList<>();
         }
-
-        filteredList = new ArrayList<>(customerList);
-        adapter = new CustomerAdapter(filteredList, this::openCustomerDetails);
-
-        rvCustomers.setLayoutManager(new LinearLayoutManager(getContext()));
-        rvCustomers.setAdapter(adapter);
-
-        updateSummary();
+        filteredTransactions = new ArrayList<>(transactionList);
     }
 
-    private void openCustomerDetails(Customer customer) {
-        if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).showCustomerDetails(customer);
+    private void initializeViews(View view) {
+        rvTransactions = view.findViewById(R.id.rv_transactions);
+        etSearch = view.findViewById(R.id.et_search);
+        tvTotalBalance = view.findViewById(R.id.tv_total_outstanding);
+        tvTotalCustomers = view.findViewById(R.id.tv_customer_count);
+        btnAddCustomer = view.findViewById(R.id.btn_add_customer);
+        chartContainer = view.findViewById(R.id.chart_container);
+        chipGroupFilter = view.findViewById(R.id.chip_group_filter);
+
+        if (btnAddCustomer != null) {
+            btnAddCustomer.setOnClickListener(v -> showAddCustomerDialog());
         }
+
+        // Navigation for Quick Actions
+        view.findViewById(R.id.btn_voice).setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).showVoice();
+        });
+        view.findViewById(R.id.btn_customers).setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).showCustomers();
+        });
+        view.findViewById(R.id.btn_bill).setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).showBill();
+        });
+        
+        view.findViewById(R.id.btn_view_all).setOnClickListener(v -> {
+             if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).showBill();
+        });
+    }
+
+    private void setupRecyclerView() {
+        transactionAdapter = new TransactionAdapter(filteredTransactions, customerList);
+        rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
+        rvTransactions.setAdapter(transactionAdapter);
+    }
+
+    private void setupSearch() {
+        if (etSearch != null) {
+            etSearch.setHint("Search transactions...");
+            etSearch.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    filter(s.toString());
+                }
+
+                @Override
+                public void afterTextChanged(Editable s) {}
+            });
+        }
+    }
+
+    private void setupChartFilters() {
+        chipGroupFilter.setOnCheckedStateChangeListener((group, checkedIds) -> {
+            if (checkedIds.isEmpty()) return;
+            int id = checkedIds.get(0);
+            if (id == R.id.chip_week) {
+                updateChart("week");
+            } else if (id == R.id.chip_month) {
+                updateChart("month");
+            }
+        });
+    }
+
+    private void filter(String text) {
+        filteredTransactions.clear();
+        if (text == null || text.isEmpty()) {
+            filteredTransactions.addAll(transactionList);
+        } else {
+            String query = text.toLowerCase();
+            for (Transaction t : transactionList) {
+                if (t.getItem() != null && t.getItem().toLowerCase().contains(query)) {
+                    filteredTransactions.add(t);
+                } else if ("payment".equals(t.getType()) && "payment".contains(query)) {
+                    filteredTransactions.add(t);
+                }
+            }
+        }
+        transactionAdapter.notifyDataSetChanged();
     }
 
     private void updateSummary() {
@@ -94,115 +153,131 @@ public class HomeFragment extends Fragment {
         for (Customer c : customerList) {
             total += c.getOutstanding();
         }
-        tvTotalOutstanding.setText(String.format(Locale.getDefault(), "₹%d", total));
-        tvCustomerCount.setText(String.format(Locale.getDefault(), "%d active", customerList.size()));
-        tvStatsSummary.setText(String.format(Locale.getDefault(), "%d customers • %d transactions", customerList.size(), transactionList.size()));
+        tvTotalBalance.setText(String.format(Locale.getDefault(), "₹%d", total));
+        tvTotalCustomers.setText(String.format(Locale.getDefault(), "%d active", customerList.size()));
     }
 
-    private void setupClickListeners() {
-        btnVoice.setOnClickListener(v -> startVoiceSimulation());
-        btnBill.setOnClickListener(v -> {
-            if (customerList.isEmpty()) return;
-            showBillTemplateSelection(customerList.get(0));
-        });
-        btnAddCustomer.setOnClickListener(v -> showAddCustomerDialog());
-    }
+    private void updateChart(String filter) {
+        chartContainer.removeAllViews();
+        int days = filter.equals("week") ? 7 : 30;
+        
+        long now = System.currentTimeMillis();
+        long dayMillis = 24 * 60 * 60 * 1000L;
+        
+        int maxVal = 1000;
+        for (Transaction t : transactionList) if (t.getTotal() > maxVal) maxVal = t.getTotal();
 
-    private void setupSearch() {
-        etSearch.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                filter(s.toString());
-            }
-            @Override
-            public void afterTextChanged(Editable s) {}
-        });
-    }
-
-    private void filter(String text) {
-        filteredList.clear();
-        if (text.isEmpty()) {
-            filteredList.addAll(customerList);
-        } else {
-            for (Customer item : customerList) {
-                if (item.getName().toLowerCase().contains(text.toLowerCase())) {
-                    filteredList.add(item);
+        for (int i = days - 1; i >= 0; i--) {
+            long startTime = now - (i + 1) * dayMillis;
+            long endTime = now - i * dayMillis;
+            
+            int lendAmount = 0;
+            int payAmount = 0;
+            
+            for (Transaction t : transactionList) {
+                if (t.getDate() >= startTime && t.getDate() < endTime) {
+                    if ("lend".equals(t.getType())) lendAmount += t.getTotal();
+                    else payAmount += t.getTotal();
                 }
             }
+
+            addBarToChart(lendAmount, payAmount, maxVal);
         }
-        adapter.notifyDataSetChanged();
     }
 
-    private void startVoiceSimulation() {
-        String simulatedVoice = "Ramesh ne 2 kg dal liya 120 rupaye";
-        VoiceParser.ParseResult result = VoiceParser.parse(simulatedVoice, customerList);
+    private void addBarToChart(int lend, int pay, int max) {
+        LinearLayout barLayout = new LinearLayout(getContext());
+        barLayout.setOrientation(LinearLayout.VERTICAL);
+        barLayout.setGravity(Gravity.BOTTOM);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+        params.setMargins(4, 0, 4, 0);
+        barLayout.setLayoutParams(params);
 
-        new AlertDialog.Builder(getContext())
-                .setTitle("Voice Action Detected")
-                .setMessage("Confirm action: " + result.toString())
-                .setPositiveButton("Confirm", (dialog, which) -> processVoiceResult(result))
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void processVoiceResult(VoiceParser.ParseResult result) {
-        if ("new_customer".equals(result.type)) {
-            Customer c = new Customer(customerList.size() + 1, result.customerName, result.phone, 0);
-            customerList.add(c);
-        } else if ("lend".equals(result.type) && result.customerId != null) {
-            int total = (result.price != null && result.qty != null) ? (int)(result.price * result.qty) : 0;
-            transactionList.add(new Transaction(transactionList.size() + 1, result.customerId, "lend", result.item, result.qty, result.unit, result.price, total, System.currentTimeMillis(), "Voice Entry"));
-            for (Customer c : customerList) {
-                if (c.getId() == result.customerId) {
-                    c.updateBalance(total, true);
-                    break;
-                }
-            }
-        } else if ("payment".equals(result.type) && result.customerId != null) {
-            int amount = result.amount != null ? result.amount : 0;
-            transactionList.add(new Transaction(transactionList.size() + 1, result.customerId, "payment", amount, System.currentTimeMillis(), "Voice Payment"));
-            for (Customer c : customerList) {
-                if (c.getId() == result.customerId) {
-                    c.updateBalance(amount, false);
-                    break;
-                }
-            }
+        if (lend > 0) {
+            View lendBar = new View(getContext());
+            int height = Math.max(10, (lend * 100) / max); 
+            lendBar.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height * 2));
+            lendBar.setBackgroundColor(getResources().getColor(R.color.red_error));
+            barLayout.addView(lendBar);
         }
-        filter(etSearch.getText().toString());
-        updateSummary();
-        Toast.makeText(getContext(), "Saved successfully!", Toast.LENGTH_SHORT).show();
+
+        if (pay > 0) {
+            View payBar = new View(getContext());
+            int height = Math.max(10, (pay * 100) / max); 
+            payBar.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height * 2));
+            payBar.setBackgroundColor(getResources().getColor(R.color.green_success));
+            barLayout.addView(payBar);
+        }
+        
+        if (lend == 0 && pay == 0) {
+            View emptyBar = new View(getContext());
+            emptyBar.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 4));
+            emptyBar.setBackgroundColor(getResources().getColor(R.color.text_muted));
+            emptyBar.setAlpha(0.2f);
+            barLayout.addView(emptyBar);
+        }
+
+        chartContainer.addView(barLayout);
+    }
+
+    public void processVoiceCommand(String command) {
+        VoiceParser.ParseResult result = VoiceParser.parse(command, customerList);
+        if (result != null) {
+            if ("new_customer".equals(result.type)) {
+                customerList.add(new Customer(customerList.size() + 1, result.customerName, result.phone, 0));
+            } else if (result.customerId != null) {
+                for (Customer c : customerList) {
+                    if (c.getId() == result.customerId) {
+                        int amount = 0;
+                        if ("lend".equals(result.type)) {
+                            amount = (result.price != null && result.qty != null) ? (int)(result.price * result.qty) : (result.amount != null ? result.amount : 0);
+                            c.updateBalance(amount, true);
+                        } else if ("payment".equals(result.type)) {
+                            amount = result.amount != null ? result.amount : 0;
+                            c.updateBalance(amount, false);
+                        }
+                        
+                        if (getActivity() instanceof MainActivity) {
+                            MainActivity activity = (MainActivity) getActivity();
+                            int nextId = activity.getTransactionList().size() + 1;
+                            Transaction t;
+                            if ("lend".equals(result.type)) {
+                                t = new Transaction(nextId, c.getId(), "lend", result.item, result.qty, result.unit, result.price, amount, System.currentTimeMillis(), "Voice Entry");
+                            } else {
+                                t = new Transaction(nextId, c.getId(), "payment", amount, System.currentTimeMillis(), "Voice Payment");
+                            }
+                            activity.getTransactionList().add(t);
+                        }
+                        break;
+                    }
+                }
+            }
+            filter(etSearch.getText().toString());
+            updateSummary();
+            updateChart(chipGroupFilter.getCheckedChipId() == R.id.chip_month ? "month" : "week");
+            Toast.makeText(getContext(), "Saved successfully!", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void showAddCustomerDialog() {
-        View view = getLayoutInflater().inflate(R.layout.dialog_add_customer, null);
-        EditText etName = view.findViewById(R.id.et_name);
-        EditText etPhone = view.findViewById(R.id.et_phone);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_customer, null);
+        EditText etName = dialogView.findViewById(R.id.et_name);
+        EditText etPhone = dialogView.findViewById(R.id.et_phone);
 
-        new AlertDialog.Builder(getContext())
-                .setTitle("Add New Customer")
-                .setView(view)
-                .setPositiveButton("Add", (dialog, which) -> {
-                    String name = etName.getText().toString();
-                    String phone = etPhone.getText().toString();
+        new MaterialAlertDialogBuilder(requireContext())
+                .setView(dialogView)
+                .setPositiveButton("Create Account", (dialog, which) -> {
+                    String name = etName.getText().toString().trim();
+                    String phone = etPhone.getText().toString().trim();
                     if (!name.isEmpty()) {
                         customerList.add(new Customer(customerList.size() + 1, name, phone, 0));
-                        filter(etSearch.getText().toString());
                         updateSummary();
+                        Toast.makeText(getContext(), "Customer added successfully", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(getContext(), "Name is required", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void showBillTemplateSelection(Customer customer) {
-        String[] templates = {"Simple Bill", "Detailed Bill", "Fancy Bill"};
-        new AlertDialog.Builder(getContext())
-                .setTitle("Select Bill Template")
-                .setItems(templates, (dialog, which) -> {
-                    Toast.makeText(getContext(), "Generating " + templates[which] + " for " + customer.getName(), Toast.LENGTH_LONG).show();
-                })
                 .show();
     }
 }
