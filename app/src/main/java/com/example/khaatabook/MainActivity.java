@@ -1,31 +1,42 @@
 package com.example.khaatabook;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
+
+import com.example.khaatabook.voice.VoiceInputManager;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final int PERMISSIONS_REQUEST_RECORD_AUDIO = 1;
+
     private TextView btnBack;
     private Button btnVoiceHeader;
     private TextView tvTitle;
-    private TextView btnNavHome, btnNavVoice, btnNavCustomers, btnNavBills;
+    private TextView btnNavHome, btnNavTransactions, btnNavVoice, btnNavCustomers, btnNavBills;
 
     private List<Customer> customerList;
     private List<Transaction> transactionList;
 
     private Fragment currentFragment;
     private String currentScreen = "home";
+
+    private VoiceInputManager voiceInputManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
         initializeViews();
         setupData();
         setupNavigation();
+        setupVoiceInput();
         showHome();
     }
 
@@ -43,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
         btnVoiceHeader = findViewById(R.id.btn_voice_header);
         tvTitle = findViewById(R.id.tv_title);
         btnNavHome = findViewById(R.id.btn_nav_home);
+        btnNavTransactions = findViewById(R.id.btn_nav_transactions);
         btnNavVoice = findViewById(R.id.btn_nav_voice);
         btnNavCustomers = findViewById(R.id.btn_nav_customers);
         btnNavBills = findViewById(R.id.btn_nav_bills);
@@ -58,20 +71,55 @@ public class MainActivity extends AppCompatActivity {
         customerList.add(new Customer(3, "Anita Sharma", "9012345678", 180));
 
         transactionList = new ArrayList<>();
-        transactionList.add(new Transaction(1, 1, "lend", "Rice", 5, "kg", 60, 300, System.currentTimeMillis(), ""));
+        transactionList.add(new Transaction(1, 1, "lend", "Rice", 5, "kg", 60, 300, System.currentTimeMillis(), "Initial Entry"));
     }
 
     private void setupNavigation() {
         btnNavHome.setOnClickListener(v -> showHome());
+        btnNavTransactions.setOnClickListener(v -> showTransactions());
         btnNavVoice.setOnClickListener(v -> showVoice());
         btnNavCustomers.setOnClickListener(v -> showCustomers());
         btnNavBills.setOnClickListener(v -> showBill());
+    }
+
+    private void setupVoiceInput() {
+        voiceInputManager = new VoiceInputManager();
+        
+        // Check for permissions
+        int permissionCheck = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.RECORD_AUDIO);
+        if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, PERMISSIONS_REQUEST_RECORD_AUDIO);
+        } else {
+            voiceInputManager.init(this);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSIONS_REQUEST_RECORD_AUDIO) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                voiceInputManager.init(this);
+            } else {
+                Toast.makeText(this, "Permission denied to record audio", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    public VoiceInputManager getVoiceInputManager() {
+        return voiceInputManager;
     }
 
     public void showHome() {
         currentScreen = "home";
         updateUI();
         replaceFragment(new HomeFragment());
+    }
+
+    public void showTransactions() {
+        currentScreen = "transactions";
+        updateUI();
+        replaceFragment(new TransactionsFragment());
     }
 
     public void showVoice() {
@@ -105,7 +153,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void showBillModal(Customer customer, String template) {
-        // Show bill modal - for now just toast
         Toast.makeText(this, "Generating " + template + " bill for " + customer.getName(), Toast.LENGTH_LONG).show();
     }
 
@@ -119,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
         int inactiveColor = getResources().getColor(R.color.text_muted);
 
         btnNavHome.setTextColor(currentScreen.equals("home") ? activeColor : inactiveColor);
+        btnNavTransactions.setTextColor(currentScreen.equals("transactions") ? activeColor : inactiveColor);
         btnNavVoice.setTextColor(currentScreen.equals("voice") ? activeColor : inactiveColor);
         btnNavCustomers.setTextColor(currentScreen.equals("customers") ? activeColor : inactiveColor);
         btnNavBills.setTextColor(currentScreen.equals("bill") ? activeColor : inactiveColor);
@@ -127,6 +175,7 @@ public class MainActivity extends AppCompatActivity {
     private String getTitleForScreen(String screen) {
         switch (screen) {
             case "home": return "🏪 Udhar Khata";
+            case "transactions": return "💸 All Transactions";
             case "voice": return "🎙️ Voice Entry";
             case "customers": return "👥 Customers";
             case "bill": return "📄 Generate Bill";
@@ -156,7 +205,7 @@ public class MainActivity extends AppCompatActivity {
             Customer c = new Customer(customerList.size() + 1, result.customerName, result.phone, 0);
             customerList.add(c);
         } else if ("lend".equals(result.type) && result.customerId != null) {
-            int total = (result.price != null && result.qty != null) ? (int)(result.price * result.qty) : 0;
+            int total = (result.price != null && result.qty != null) ? (int)(result.price * result.qty) : (result.amount != null ? result.amount : 0);
             transactionList.add(new Transaction(transactionList.size() + 1, result.customerId, "lend", result.item, result.qty, result.unit, result.price, total, System.currentTimeMillis(), "Voice Entry"));
             for (Customer c : customerList) {
                 if (c.getId() == result.customerId) {
@@ -175,6 +224,20 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         Toast.makeText(this, "Saved successfully!", Toast.LENGTH_SHORT).show();
+        
+        // Refresh fragment if on home or transactions
+        if (currentScreen.equals("home") || currentScreen.equals("transactions")) {
+            if (currentScreen.equals("home")) showHome();
+            else showTransactions();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (voiceInputManager != null) {
+            voiceInputManager.destroy();
+        }
     }
 
     @Override
